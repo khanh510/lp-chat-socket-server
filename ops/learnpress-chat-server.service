@@ -1,0 +1,16 @@
+[Unit]
+Description=LearnPress Chat Socket.io server
+After=network.target redis.service
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/learnpress-chat-server
+EnvironmentFile=/etc/learnpress-chat-server.env
+ExecStart=/usr/bin/node dist/src/server.js
+Restart=always
+RestartSec=5
+User=www-data
+Group=www-data
+
+[Install]
+WantedBy=multi-user.target

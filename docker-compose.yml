@@ -1,0 +1,38 @@
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "${REDIS_HOST_PORT:-6380}:6379"
+
+  chat-server:
+    build: .
+    restart: unless-stopped
+    environment:
+      PORT: ${CONTAINER_PORT:-3000}
+      JWT_SECRET: ${JWT_SECRET:-change-me}
+      WP_SHARED_SECRET: ${WP_SHARED_SECRET:-change-me}
+      CORS_ORIGIN: ${CORS_ORIGIN:-*}
+      PUBLISH_RATE_LIMIT_WINDOW_MS: ${PUBLISH_RATE_LIMIT_WINDOW_MS:-60000}
+      PUBLISH_RATE_LIMIT_MAX: ${PUBLISH_RATE_LIMIT_MAX:-120}
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      - redis
+    ports:
+      - "${CHAT_SERVER_HOST_PORT:-3010}:${CONTAINER_PORT:-3000}"
+
+  chat-server-2:
+    build: .
+    restart: unless-stopped
+    environment:
+      PORT: ${CONTAINER_PORT:-3000}
+      JWT_SECRET: ${JWT_SECRET:-change-me}
+      WP_SHARED_SECRET: ${WP_SHARED_SECRET:-change-me}
+      CORS_ORIGIN: ${CORS_ORIGIN:-*}
+      PUBLISH_RATE_LIMIT_WINDOW_MS: ${PUBLISH_RATE_LIMIT_WINDOW_MS:-60000}
+      PUBLISH_RATE_LIMIT_MAX: ${PUBLISH_RATE_LIMIT_MAX:-120}
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      - redis
+    ports:
+      - "${CHAT_SERVER_SECONDARY_HOST_PORT:-3011}:${CONTAINER_PORT:-3000}"
