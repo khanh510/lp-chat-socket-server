@@ -8,6 +8,8 @@ export interface AppConfig {
   corsOrigin: string;
   publishRateLimitWindowMs: number;
   publishRateLimitMax: number;
+  publishMaxClockSkewSeconds: number;
+  metricsToken: string;
 }
 
 function readRequired(name: string): string {
@@ -48,4 +50,6 @@ export const config: AppConfig = {
   corsOrigin: process.env.CORS_ORIGIN?.trim() || '*',
   publishRateLimitWindowMs: readInteger('PUBLISH_RATE_LIMIT_WINDOW_MS', 60_000),
   publishRateLimitMax: readInteger('PUBLISH_RATE_LIMIT_MAX', 120),
+  publishMaxClockSkewSeconds: readInteger('PUBLISH_MAX_CLOCK_SKEW_SECONDS', 300),
+  metricsToken: process.env.METRICS_TOKEN?.trim() || '',
 };

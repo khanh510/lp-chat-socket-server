@@ -59,7 +59,7 @@ async function connectClient(index: number, latencies: number[]): Promise<Socket
     });
   });
 
-  socket.on('load.message', (payload: { sent_at?: number }) => {
+  socket.on('message.new', (payload: { sent_at?: number }) => {
     if (typeof payload.sent_at === 'number') {
       latencies.push(Date.now() - payload.sent_at);
     }
@@ -71,7 +71,8 @@ async function connectClient(index: number, latencies: number[]): Promise<Socket
 async function publish(sequence: number): Promise<void> {
   const body = JSON.stringify({
     room_id: roomId,
-    event: 'load.message',
+    event: 'message.new',
+    ts: Math.floor(Date.now() / 1000),
     payload: {
       sequence,
       sent_at: Date.now(),

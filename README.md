@@ -31,7 +31,8 @@ Docker Desktop databases, and native Redis:
 
 If a developer already uses one of these host ports, change only the host-side
 values in `.env`; leave the container ports unchanged unless you know you need
-to change them.
+to change them. Docker binds host ports to `127.0.0.1` by default so Redis and
+the socket service are not exposed to the LAN.
 
 ## Quick Start With Docker
 
@@ -83,6 +84,8 @@ Docker Compose reads `.env` automatically.
 
 | Variable | Default | Used by | Description |
 | --- | --- | --- | --- |
+| `CHAT_SERVER_BIND_IP` | `127.0.0.1` | Docker chat-server bindings | Loopback-only by default. Set to `0.0.0.0` only when another machine must connect. |
+| `REDIS_BIND_IP` | `127.0.0.1` | Docker Redis binding | Keep loopback. Do not expose Redis to the LAN or internet. |
 | `CONTAINER_PORT` | `3000` | Node containers | Internal HTTP/Socket.io port. Usually do not change. |
 | `CHAT_SERVER_HOST_PORT` | `3010` | Host -> primary container | Public local port for the primary Socket.io server. |
 | `CHAT_SERVER_SECONDARY_HOST_PORT` | `3011` | Host -> secondary container | Public local port for the second Socket.io replica. |
@@ -92,6 +95,8 @@ Docker Compose reads `.env` automatically.
 | `CORS_ORIGIN` | `*` | Node containers | Allowed browser origin. Use your site URL in production. |
 | `PUBLISH_RATE_LIMIT_WINDOW_MS` | `60000` | Node containers | Publish endpoint rate-limit window. |
 | `PUBLISH_RATE_LIMIT_MAX` | `120` | Node containers | Max publish calls per rate-limit window. |
+| `PUBLISH_MAX_CLOCK_SKEW_SECONDS` | `300` | Node containers | Max accepted age/future skew for signed publish payloads. |
+| `METRICS_TOKEN` | empty | Node containers | Optional bearer token for `GET /metrics`. |
 
 The current WordPress addon exposes one Socket.io secret setting, so
 `JWT_SECRET`, `WP_SHARED_SECRET`, and the WordPress `Socket.io HMAC secret`
@@ -128,7 +133,9 @@ WordPress option names:
 URL guidance:
 
 - Same machine local development: `http://127.0.0.1:3010`
-- Another device on the LAN: `http://<developer-machine-lan-ip>:3010`
+- Another device on the LAN: set `CHAT_SERVER_BIND_IP=0.0.0.0`, keep
+  `REDIS_BIND_IP=127.0.0.1`, then use
+  `http://<developer-machine-lan-ip>:3010`
 - HTTPS / production: use the public reverse-proxy URL, for example
   `https://chat.example.test`
 - Use `http://127.0.0.1:3011` only when intentionally testing the secondary
@@ -208,8 +215,9 @@ Direct Node mode uses:
 ## Runtime Endpoints
 
 - `GET /healthz` returns service and Redis readiness.
-- `GET /metrics` exposes Prometheus metrics.
-- `POST /publish` accepts `{ "room_id": 1, "event": "message.created", "payload": {} }`.
+- `GET /metrics` exposes Prometheus metrics. If `METRICS_TOKEN` is set, send
+  `Authorization: Bearer <METRICS_TOKEN>`.
+- `POST /publish` accepts `{ "room_id": 1, "event": "message.new", "ts": 1760000000, "payload": {} }`.
 
 `POST /publish` requires `X-Signature` to contain:
 
@@ -220,14 +228,22 @@ base64(HMAC-SHA256(raw request body, WP_SHARED_SECRET))
 That matches the LearnPress addon `SocketHmacSigner`. Hex
 `sha256=<digest>` is also accepted for diagnostics.
 
+Signed publish payloads must include a Unix timestamp field `ts`. Requests are
+rejected when the timestamp is older or newer than
+`PUBLISH_MAX_CLOCK_SKEW_SECONDS`.
+
+Accepted publish events are limited to the LearnPress transport events:
+`message.new`, `message.updated`, `message.deleted`, `typing`, and `presence`.
+
 ## Socket.io Client Contract
 
 The WordPress addon fetches a JWT from:
 
 `/wp-json/lp/v1/chat/socket/token`
 
-Clients connect to the Socket.io server with `auth.token` containing an HS256
-JWT:
+Clients connect to the Socket.io server with Socket.io `auth.token` containing
+an HS256 JWT. Tokens in query strings are intentionally rejected so JWTs do not
+leak through URLs, logs, or browser history:
 
 ```json
 {
@@ -248,6 +264,8 @@ addon and keeps `/chat` available for direct namespace tests.
 
 - Replace `change-me` secrets before deploying.
 - Set `CORS_ORIGIN` to the exact WordPress origin.
+- Set `METRICS_TOKEN` and restrict `/metrics` at the reverse proxy when exposing
+  the service outside a developer machine.
 - Put the service behind HTTPS with a reverse proxy.
 - Proxy both normal HTTP requests and Socket.io WebSocket upgrades.
 - Keep the WordPress `Socket.io URL` set to the public HTTPS URL.

@@ -16,12 +16,7 @@ function normalizeRooms(value: unknown): number[] {
 }
 
 export function verifyJwt(socket: Socket, next: (err?: Error) => void): void {
-  const token =
-    typeof socket.handshake.auth?.token === 'string'
-      ? socket.handshake.auth.token
-      : typeof socket.handshake.query?.token === 'string'
-        ? socket.handshake.query.token
-        : '';
+  const token = typeof socket.handshake.auth?.token === 'string' ? socket.handshake.auth.token : '';
 
   if (!token) {
     next(new Error('auth token required'));

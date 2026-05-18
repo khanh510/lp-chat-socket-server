@@ -7,6 +7,7 @@ import { publishCounter, publishLatencyHistogram } from '../metrics.js';
 import type { PublishBody } from '../types.js';
 
 const eventNamePattern = /^[a-z][a-z0-9._:-]{0,80}$/i;
+const allowedEvents = new Set(['message.new', 'message.updated', 'message.deleted', 'typing', 'presence']);
 
 function parsePublishBody(body: unknown): PublishBody | null {
   if (typeof body !== 'object' || body === null) {
@@ -20,13 +21,29 @@ function parsePublishBody(body: unknown): PublishBody | null {
     return null;
   }
 
-  if (typeof candidate.event !== 'string' || !eventNamePattern.test(candidate.event)) {
+  if (
+    typeof candidate.event !== 'string' ||
+    !eventNamePattern.test(candidate.event) ||
+    !allowedEvents.has(candidate.event)
+  ) {
+    return null;
+  }
+
+  const ts = Number(candidate.ts);
+  const now = Math.floor(Date.now() / 1000);
+
+  if (
+    !Number.isInteger(ts) ||
+    ts <= 0 ||
+    Math.abs(now - ts) > config.publishMaxClockSkewSeconds
+  ) {
     return null;
   }
 
   return {
     room_id: roomId,
     event: candidate.event,
+    ts,
     payload: candidate.payload ?? {},
   };
 }
@@ -39,7 +56,7 @@ export function publishRoute(app: Express, namespaces: Namespace[]): void {
     legacyHeaders: false,
   });
 
-  app.post('/publish', limiter, hmacVerifyMiddleware, (req: Request, res: Response) => {
+  app.post('/publish', hmacVerifyMiddleware, limiter, (req: Request, res: Response) => {
     const parsed = parsePublishBody(req.body);
 
     if (!parsed) {

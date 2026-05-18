@@ -14,5 +14,6 @@ export interface RawBodyRequest extends Request {
 export interface PublishBody {
   room_id: number | string;
   event: string;
+  ts?: number | string;
   payload?: unknown;
 }

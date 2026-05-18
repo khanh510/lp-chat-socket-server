@@ -21,6 +21,7 @@ function parseRoomId(value: unknown): number | null {
 }
 
 const app = express();
+const typingThrottleMs = 1500;
 app.use(
   express.json({
     limit: '256kb',
@@ -56,7 +57,7 @@ await Promise.all([pub.connect(), sub.connect()]);
 io.adapter(createAdapter(pub, sub));
 redisReady = true;
 
-healthRoute(app, () => redisReady);
+healthRoute(app, () => redisReady, config.metricsToken);
 const chatNamespaces: Namespace[] = [io.of('/'), io.of('/chat')];
 
 function updateConnectedClientsGauge(): void {
@@ -66,6 +67,8 @@ function updateConnectedClientsGauge(): void {
 function bindChatNamespace(namespace: Namespace): void {
   namespace.use(verifyJwt);
   namespace.on('connection', (socket: Socket) => {
+    const typingLastSentAt = new Map<number, number>();
+
     updateConnectedClientsGauge();
 
     socket.on('subscribe', ({ room_id }: { room_id?: unknown }, ack?: (response: unknown) => void) => {
@@ -88,6 +91,13 @@ function bindChatNamespace(namespace: Namespace): void {
       if (!roomId || !hasRoomAccess(claims, roomId)) {
         return;
       }
+
+      const now = Date.now();
+      const lastSentAt = typingLastSentAt.get(roomId) || 0;
+      if (now - lastSentAt < typingThrottleMs) {
+        return;
+      }
+      typingLastSentAt.set(roomId, now);
 
       socket.to(`room:${roomId}`).emit('typing', {
         room_id: roomId,
